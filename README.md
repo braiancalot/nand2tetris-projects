@@ -11,10 +11,10 @@ nand2tetris-projects/
 ├─ 04/              # Machine Language
 ├─ 05/              # Computer Architecture
 ├─ 06/              # Assembler
-├─ 07/              # Virtual Machine I
-├─ 08/              # Virtual Machine II
+├─ 07/              # Virtual Machine I: Stack Arithmetic
+├─ 08/              # Virtual Machine II: Program Control
 ├─ 09/              # High-Level Language
-├─ 10/              # Compiler I
-├─ 11/              # Compiler II
+├─ 10/              # Compiler I: Syntax Analysis
+├─ 11/              # Compiler II: Code Generation
 └─ 12/              # Operating System
 ```
