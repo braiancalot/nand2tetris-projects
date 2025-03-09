@@ -16,5 +16,8 @@ nand2tetris-projects/
 ├─ 09/              # High-Level Language
 ├─ 10/              # Compiler I: Syntax Analysis
 ├─ 11/              # Compiler II: Code Generation
-└─ 12/              # Operating System
+├─ 12/              # Operating System
+└─ games/           # Personal projects built using the system
+    ├─ tetris/      # Implementation of Tetris
+    └─ conway/      # Implementation of Conway's Game of Life
 ```
