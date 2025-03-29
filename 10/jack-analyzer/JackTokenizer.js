@@ -103,26 +103,16 @@ export class JackTokenizer {
 
   tokenType() {
     const token = this.currentToken;
-    if (symbols.includes(token)) {
-      if (token === "<") {
-        this.currentToken = "&lt;";
-      } else if (token === ">") {
-        this.currentToken = "&gt;";
-      } else if (token === '"') {
-        this.currentToken = "&quot;";
-      } else if (token === "&") {
-        this.currentToken = "&amp;";
-      }
-
-      return SYMBOL;
-    }
 
     if (keywords.includes(token)) {
       return KEYWORD;
     }
 
+    if (symbols.includes(token)) {
+      return SYMBOL;
+    }
+
     if (token.startsWith('"') && token.endsWith('"')) {
-      this.currentToken = token.substring(1, token.length - 1);
       return STRING_CONST;
     }
 
@@ -131,5 +121,43 @@ export class JackTokenizer {
     }
 
     return IDENTIFIER;
+  }
+
+  keyword() {
+    return this.currentToken;
+  }
+
+  symbol() {
+    const token = this.currentToken;
+
+    if (token === "<") {
+      return "&lt;";
+    }
+
+    if (token === ">") {
+      return "&gt;";
+    }
+
+    if (token === '"') {
+      return "&quot;";
+    }
+
+    if (token === "&") {
+      return "&amp;";
+    }
+
+    return this.currentToken;
+  }
+
+  identifier() {
+    return this.currentToken;
+  }
+
+  intVal() {
+    return this.currentToken;
+  }
+
+  stringVal() {
+    return this.currentToken.substring(1, this.currentToken.length - 1);
   }
 }

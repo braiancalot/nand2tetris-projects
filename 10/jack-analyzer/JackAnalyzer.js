@@ -2,6 +2,13 @@ import fs from "fs";
 import path from "path";
 
 import { JackTokenizer } from "./JackTokenizer.js";
+import {
+  IDENTIFIER,
+  INT_CONST,
+  KEYWORD,
+  STRING_CONST,
+  SYMBOL,
+} from "./utils.js";
 
 const args = process.argv.slice(2);
 const source = args[0];
@@ -46,9 +53,31 @@ function extractTokens(source, output) {
   while (jackTokenizer.hasMoreTokens()) {
     jackTokenizer.advance();
     const tokenType = jackTokenizer.tokenType();
-    writer.write(
-      `<${tokenType}> ${jackTokenizer.currentToken} </${tokenType}>\n`
-    );
+    let string;
+
+    switch (tokenType) {
+      case KEYWORD:
+        string = jackTokenizer.keyword();
+        break;
+
+      case SYMBOL:
+        string = jackTokenizer.symbol();
+        break;
+
+      case IDENTIFIER:
+        string = jackTokenizer.identifier();
+        break;
+
+      case INT_CONST:
+        string = jackTokenizer.intVal();
+        break;
+
+      case STRING_CONST:
+        string = jackTokenizer.stringVal();
+        break;
+    }
+
+    writer.write(`<${tokenType}> ${string} </${tokenType}>\n`);
   }
 
   writer.write("</tokens>\n");
