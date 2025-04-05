@@ -9,13 +9,14 @@ import {
   IF,
   LET,
   METHOD,
+  ops,
   RETURN,
+  statementsKeywords,
   STATIC,
+  unaryOps,
   VAR,
   WHILE,
 } from "./utils.js";
-
-const statementsKeywords = [LET, IF, WHILE, DO, RETURN];
 
 export class CompilationEngine {
   constructor(input, output) {
@@ -279,6 +280,18 @@ export class CompilationEngine {
     this.currentLine++;
 
     // ('[' expression ']')?
+    if (this.getCurrentToken() === "[") {
+      // '['
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // expression
+      this.compileExpression();
+
+      // ']'
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+    }
 
     // '='
     this.write(this.sourceData[this.currentLine]);
@@ -452,6 +465,16 @@ export class CompilationEngine {
     // 'term'
     this.compileTerm();
 
+    // (op term)*
+    while (ops.includes(this.getCurrentToken())) {
+      // op
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // term
+      this.compileTerm();
+    }
+
     this.currentDeep--;
     this.write("</expression>");
   }
@@ -460,12 +483,102 @@ export class CompilationEngine {
     this.write("<term>");
     this.currentDeep++;
 
-    // 'term'
+    const finalizeTerm = () => {
+      this.currentDeep--;
+      this.write("</term>");
+    };
+
+    // '(' expression ')'
+    if (this.getCurrentToken() === "(") {
+      // '('
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // expression
+      this.compileExpression();
+
+      // ')'
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      finalizeTerm();
+      return;
+    }
+
+    // unaryOp term
+    if (unaryOps.includes(this.getCurrentToken())) {
+      // unaryOp
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // term
+      this.compileTerm();
+
+      finalizeTerm();
+      return;
+    }
+
+    this.currentLine++;
+    const nextToken = this.getCurrentToken();
+    this.currentLine--;
+
+    // subroutineCall
+    if (nextToken === "(" || nextToken === ".") {
+      if (nextToken === ".") {
+        // (className | varName)
+        this.write(this.sourceData[this.currentLine]);
+        this.currentLine++;
+
+        // '.'
+        this.write(this.sourceData[this.currentLine]);
+        this.currentLine++;
+      }
+
+      // subroutineName
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // '('
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // expressionList
+      this.compileExpressionList();
+
+      // ')'
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      finalizeTerm();
+      return;
+    }
+
+    // varName '[' expression ']'
+    if (nextToken === "[") {
+      // varName
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // '['
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      // expression
+      this.compileExpression();
+
+      // ']'
+      this.write(this.sourceData[this.currentLine]);
+      this.currentLine++;
+
+      finalizeTerm();
+      return;
+    }
+
+    // integerConstant | stringConstant | keywordConstant | varName
     this.write(this.sourceData[this.currentLine]);
     this.currentLine++;
 
-    this.currentDeep--;
-    this.write("</term>");
+    finalizeTerm();
   }
 
   compileExpressionList() {

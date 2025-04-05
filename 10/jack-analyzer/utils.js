@@ -71,3 +71,7 @@ export const SYMBOL = "symbol";
 export const IDENTIFIER = "identifier";
 export const INT_CONST = "integerConstant";
 export const STRING_CONST = "stringConstant";
+
+export const statementsKeywords = [LET, IF, WHILE, DO, RETURN];
+export const ops = ["+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "="];
+export const unaryOps = ["-", "~"];
