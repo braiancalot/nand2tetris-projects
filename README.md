@@ -18,6 +18,6 @@ nand2tetris-projects/
 ├─ 11/              # Compiler II: Code Generation
 ├─ 12/              # Operating System
 └─ games/           # Personal projects built using the system
-    ├─ tetris/      # Implementation of Tetris
-    └─ conway/      # Implementation of Conway's Game of Life
+    ├─ conway/      # Implementation of Conway's Game of Life
+    └─ tetris/      # Implementation of Tetris
 ```
