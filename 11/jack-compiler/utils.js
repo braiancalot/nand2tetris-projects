@@ -19,6 +19,28 @@ export const IF = "if";
 export const ELSE = "else";
 export const WHILE = "while";
 export const RETURN = "return";
+export const ARG = "arg";
+export const NONE = "none";
+export const TEMP = "temp";
+export const KEYWORD = "keyword";
+export const SYMBOL = "symbol";
+export const IDENTIFIER = "identifier";
+export const INT_CONST = "integerConstant";
+export const STRING_CONST = "stringConstant";
+export const ADD = "add";
+export const SUB = "sub";
+export const NEG = "neg";
+export const EQ = "eq";
+export const GT = "gt";
+export const LT = "lt";
+export const AND = "and";
+export const OR = "or";
+export const NOT = "not";
+export const CONSTANT = "constant";
+export const LOCAL = "local";
+export const ARGUMENT = "argument";
+export const THAT = "that";
+export const POINTER = "pointer";
 
 export const keywords = [
   CLASS,
@@ -66,15 +88,6 @@ export const symbols = [
   "~",
 ];
 
-export const KEYWORD = "keyword";
-export const SYMBOL = "symbol";
-export const IDENTIFIER = "identifier";
-export const INT_CONST = "integerConstant";
-export const STRING_CONST = "stringConstant";
-
 export const statementsKeywords = [LET, IF, WHILE, DO, RETURN];
-export const ops = ["+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "="];
+export const ops = ["+", "-", "*", "/", "&", "|", "<", ">", "="];
 export const unaryOps = ["-", "~"];
-
-export const ARG = "arg";
-export const NONE = "none";

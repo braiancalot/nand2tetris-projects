@@ -1,4 +1,4 @@
-import { ARG, FIELD, NONE, STATIC, VAR } from "./utils.js";
+import { NONE, STATIC, LOCAL, ARGUMENT, THIS } from "./utils.js";
 
 export class SymbolTable {
   constructor() {
@@ -14,9 +14,9 @@ export class SymbolTable {
     const index = this.varCount(kind);
     const entry = { name, type, kind, index };
 
-    if (kind === STATIC || kind === FIELD) {
+    if (kind === STATIC || kind === THIS) {
       this.classTable.push(entry);
-    } else if (kind === ARG || kind === VAR) {
+    } else if (kind === ARGUMENT || kind === LOCAL) {
       this.subroutineTable.push(entry);
     }
   }
@@ -33,7 +33,7 @@ export class SymbolTable {
 
   typeOf(name) {
     const entry = this._find(name);
-    return entry.type;
+    return entry?.type ?? NONE;
   }
 
   indexOf(name) {
@@ -49,7 +49,7 @@ export class SymbolTable {
   }
 
   _getTableByKind(kind) {
-    if (kind === STATIC || kind === FIELD) return this.classTable;
-    if (kind === ARG || kind === VAR) return this.subroutineTable;
+    if (kind === STATIC || kind === THIS) return this.classTable;
+    if (kind === ARGUMENT || kind === LOCAL) return this.subroutineTable;
   }
 }

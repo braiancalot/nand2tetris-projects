@@ -10,6 +10,7 @@ import {
   SYMBOL,
 } from "./utils.js";
 import { CompilationEngine } from "./CompilationEngine.js";
+import { VMWriter } from "./VMWriter.js";
 
 const args = process.argv.slice(2);
 const source = args[0];
@@ -59,60 +60,11 @@ function prepareOutputDirectory(directory) {
 
 async function compileFile(sourcePath, outputDir) {
   const baseName = path.basename(sourcePath, path.extname(sourcePath));
-  const tokensPath = path.join(outputDir, `${baseName}T.xml`);
-  const outputPath = path.join(outputDir, `${baseName}.xml`);
+  const outputPath = path.join(outputDir, `${baseName}.vm`);
 
-  await extractTokens(sourcePath, tokensPath);
-  compile(tokensPath, outputPath);
-}
+  const jackTokenizer = new JackTokenizer(sourcePath);
+  const vmWriter = new VMWriter(outputPath);
 
-function extractTokens(source, output) {
-  return new Promise((resolve, reject) => {
-    const writer = fs.createWriteStream(output);
-
-    writer.write("<tokens>\n");
-
-    const jackTokenizer = new JackTokenizer(source);
-
-    while (jackTokenizer.hasMoreTokens()) {
-      jackTokenizer.advance();
-      const tokenType = jackTokenizer.tokenType();
-      let string;
-
-      switch (tokenType) {
-        case KEYWORD:
-          string = jackTokenizer.keyword();
-          break;
-
-        case SYMBOL:
-          string = jackTokenizer.symbol();
-          break;
-
-        case IDENTIFIER:
-          string = jackTokenizer.identifier();
-          break;
-
-        case INT_CONST:
-          string = jackTokenizer.intVal();
-          break;
-
-        case STRING_CONST:
-          string = jackTokenizer.stringVal();
-          break;
-      }
-
-      writer.write(`<${tokenType}> ${string} </${tokenType}>\n`);
-    }
-
-    writer.write("</tokens>\n");
-    writer.end();
-
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-  });
-}
-
-function compile(source, output) {
-  const compilationEngine = new CompilationEngine(source, output);
+  const compilationEngine = new CompilationEngine(jackTokenizer, vmWriter);
   compilationEngine.compileClass();
 }

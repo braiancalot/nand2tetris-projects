@@ -43,7 +43,8 @@ export class JackTokenizer {
       line &&
       !line.startsWith("//") &&
       !line.startsWith("/*") &&
-      !line.startsWith("*")
+      !line.startsWith("*") &&
+      !line.endsWith("*/")
     );
   }
 

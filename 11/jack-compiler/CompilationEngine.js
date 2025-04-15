@@ -1,671 +1,570 @@
-import fs from "fs";
-
 import {
   ARG,
+  CONSTANT,
   CONSTRUCTOR,
   DO,
   ELSE,
-  FIELD,
   FUNCTION,
+  IDENTIFIER,
   IF,
+  INT_CONST,
+  KEYWORD,
   LET,
   METHOD,
+  NULL,
   ops,
   RETURN,
   statementsKeywords,
-  STATIC,
+  THIS,
+  TRUE,
   unaryOps,
   VAR,
   WHILE,
+  ADD,
+  TEMP,
+  NOT,
+  NEG,
+  AND,
+  OR,
+  LT,
+  GT,
+  EQ,
+  FALSE,
+  SUB,
+  LOCAL,
+  ARGUMENT,
+  STATIC,
+  FIELD,
+  POINTER,
+  NONE,
+  STRING_CONST,
+  THAT,
 } from "./utils.js";
+
 import { SymbolTable } from "./SymbolTable.js";
 
 export class CompilationEngine {
-  constructor(input, output) {
-    this.sourceData = this.readSourceFile(input);
-    this.currentLine = 0;
-    this.output = fs.createWriteStream(output);
-    this.currentDeep = 0;
+  constructor(tokenizer, vmWriter) {
+    this.tokenizer = tokenizer;
+    this.vmWriter = vmWriter;
     this.symbolTable = new SymbolTable();
-  }
-
-  readSourceFile(source) {
-    try {
-      const data = fs.readFileSync(source, "utf8");
-      return data.split("\n").filter((line) => !line.includes("tokens"));
-    } catch (error) {
-      console.error("Error reading tokens file:", error);
-      throw error;
-    }
-  }
-
-  write(string) {
-    const tab = "  ".repeat(this.currentDeep);
-    this.output.write(`${tab}${string}\n`);
-  }
-
-  writeIdentifier({ name, kind, type, index, usage }) {
-    const indent = "  ".repeat(this.currentDeep);
-    const attrs = `name="${name}" kind="${kind}" type="${type}" index="${index}" usage="${usage}"`;
-    this.output.write(`${indent}<identifier ${attrs}> ${name} </identifier>\n`);
-  }
-
-  getCurrentToken() {
-    const line = this.sourceData[this.currentLine];
-    return line.split("> ")[1].split(" <")[0];
-  }
-
-  getCurrentTokenType() {
-    const line = this.sourceData[this.currentLine];
-    return line.split("<")[1].split(">")[0];
+    this.className = null;
+    this.currentSubroutineName = null;
+    this.currentFunctionType = null;
+    this.labelCount = 0;
   }
 
   compileClass() {
-    this.write("<class>");
-    this.currentDeep++;
+    this.tokenizer.advance();
 
-    // 'class'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // className
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // '{'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // 'class'
+    this.className = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // className
+    this.tokenizer.advance(); // '{'
 
     // classVarDec*
-    while ([STATIC, FIELD].includes(this.getCurrentToken())) {
+    while ([STATIC, FIELD].includes(this.tokenizer.currentToken)) {
       this.compileClassVarDec();
     }
 
     // subroutineDec*
-    while ([CONSTRUCTOR, FUNCTION, METHOD].includes(this.getCurrentToken())) {
+    while (
+      [CONSTRUCTOR, FUNCTION, METHOD].includes(this.tokenizer.currentToken)
+    ) {
       this.compileSubroutine();
     }
 
-    // '}'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</class>");
-
-    this.output.close();
+    this.tokenizer.advance(); // '}'
+    this.vmWriter.close();
   }
 
   compileClassVarDec() {
-    this.write("<classVarDec>");
-    this.currentDeep++;
+    const kind = this.tokenizer.currentToken === STATIC ? STATIC : THIS;
+    this.tokenizer.advance(); // ('static' | 'field')
 
-    // ('static' | 'field')
-    const kind = this.getCurrentToken();
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    const type = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // type
 
-    // type
-    const type = this.getCurrentToken();
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // varName
-    const name = this.getCurrentToken();
+    const name = this.tokenizer.currentToken;
     this.symbolTable.define(name, type, kind);
-    const index = this.symbolTable.indexOf(name);
-    this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-    this.currentLine++;
+    this.tokenizer.advance(); // varName
 
     // (',' varName)*
-    while (this.getCurrentToken() === ",") {
-      // ','
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    while (this.tokenizer.currentToken === ",") {
+      this.tokenizer.advance(); // ','
 
-      // varName
-      const name = this.getCurrentToken();
+      const name = this.tokenizer.currentToken;
       this.symbolTable.define(name, type, kind);
-      const index = this.symbolTable.indexOf(name);
-      this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-      this.currentLine++;
+      this.tokenizer.advance(); // varName
     }
 
-    // ';'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</classVarDec>");
+    this.tokenizer.advance(); // ';'
   }
 
   compileSubroutine() {
     this.symbolTable.reset();
 
-    this.write("<subroutineDec>");
-    this.currentDeep++;
+    this.currentFunctionType = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // ('constructor' | 'function' | 'method')
+    this.tokenizer.advance(); // ('void' | type)
+    this.currentSubroutineName = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // subroutineName
+    this.tokenizer.advance(); // '('
 
-    // ('constructor' | 'function' | 'method')
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // ('void' | type)
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // subroutineName
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // '('
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // parameterList
     this.compileParameterList();
 
-    // ')'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // ')'
 
-    //subroutineBody
     this.compileSubroutineBody();
-
-    this.currentDeep--;
-    this.write("</subroutineDec>");
   }
 
   compileParameterList() {
-    this.write("<parameterList>");
-    this.currentDeep++;
-
-    // ((type varName) (',' type varName)*)?
-    if (this.getCurrentToken() != ")") {
-      const kind = ARG;
-
-      // type
-      const type = this.getCurrentToken();
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // varName
-      const name = this.getCurrentToken();
-      this.symbolTable.define(name, type, kind);
-      const index = this.symbolTable.indexOf(name);
-      this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-      this.currentLine++;
-
-      // (',' type varName)*
-      while (this.getCurrentToken() === ",") {
-        // ','
-        this.write(this.sourceData[this.currentLine]);
-        this.currentLine++;
-
-        // type
-        const type = this.getCurrentToken();
-        this.write(this.sourceData[this.currentLine]);
-        this.currentLine++;
-
-        const name = this.getCurrentToken();
-        this.symbolTable.define(name, type, kind);
-        const index = this.symbolTable.indexOf(name);
-        this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-        this.currentLine++;
-      }
+    if (this.currentFunctionType === METHOD) {
+      this.symbolTable.define("this", this.className, ARGUMENT, 0);
     }
 
-    this.currentDeep--;
-    this.write("</parameterList>");
+    // ((type varName) (',' type varName)*)?
+    if (this.tokenizer.currentToken != ")") {
+      const kind = ARGUMENT;
+
+      const type = this.tokenizer.currentToken;
+      this.tokenizer.advance(); // type
+
+      const name = this.tokenizer.currentToken;
+      this.symbolTable.define(name, type, kind);
+      this.tokenizer.advance(); // varName
+
+      // (',' type varName)*
+      while (this.tokenizer.currentToken === ",") {
+        this.tokenizer.advance(); // ','
+
+        const type = this.tokenizer.currentToken;
+        this.tokenizer.advance(); // type
+
+        const name = this.tokenizer.currentToken;
+        this.symbolTable.define(name, type, kind);
+        this.tokenizer.advance(); // varName
+      }
+    }
   }
 
   compileSubroutineBody() {
-    this.write("<subroutineBody>");
-    this.currentDeep++;
-
-    // '{'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // '{'
 
     // varDec*
-    while (this.getCurrentToken() === VAR) {
+    while (this.tokenizer.currentToken === VAR) {
       this.compileVarDec();
     }
 
-    // statements
+    const nVars = this.symbolTable.varCount(LOCAL);
+
+    const functionName = `${this.className}.${this.currentSubroutineName}`;
+    this.vmWriter.writeFunction(functionName, nVars);
+
+    if (this.currentFunctionType === CONSTRUCTOR) {
+      const nFields = this.symbolTable.varCount(THIS);
+      this.vmWriter.writePush(CONSTANT, nFields);
+      this.vmWriter.writeCall("Memory.alloc", 1);
+      this.vmWriter.writePop(POINTER, 0);
+    } else if (this.currentFunctionType === METHOD) {
+      this.vmWriter.writePush(ARGUMENT, 0);
+      this.vmWriter.writePop(POINTER, 0);
+    }
+
     this.compileStatements();
 
-    // '}'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</subroutineBody>");
+    this.tokenizer.advance(); // '}'
   }
 
   compileVarDec() {
-    this.write("<varDec>");
-    this.currentDeep++;
+    const kind = LOCAL;
+    this.tokenizer.advance(); // 'var'
 
-    // 'var'
-    const kind = this.getCurrentToken();
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    const type = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // type
 
-    // type
-    const type = this.getCurrentToken();
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // varName
-    const name = this.getCurrentToken();
+    const name = this.tokenizer.currentToken;
     this.symbolTable.define(name, type, kind);
-    const index = this.symbolTable.indexOf(name);
-    this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-    this.currentLine++;
+    this.tokenizer.advance(); // varName
 
     // (',' varName)*
-    while (this.getCurrentToken() === ",") {
-      // ','
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    while (this.tokenizer.currentToken === ",") {
+      this.tokenizer.advance(); // ','
 
-      // varName
-      const name = this.getCurrentToken();
+      const name = this.tokenizer.currentToken;
       this.symbolTable.define(name, type, kind);
-      const index = this.symbolTable.indexOf(name);
-      this.writeIdentifier({ name, kind, type, index, usage: "definition" });
-      this.currentLine++;
+      this.tokenizer.advance(); // varName
     }
 
-    // ';'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</varDec>");
+    this.tokenizer.advance(); // ';'
   }
 
   compileStatements() {
-    this.write("<statements>");
-    this.currentDeep++;
-
     // statement*
-    while (statementsKeywords.includes(this.getCurrentToken())) {
-      if (this.getCurrentToken() === LET) {
+    while (statementsKeywords.includes(this.tokenizer.currentToken)) {
+      if (this.tokenizer.currentToken === LET) {
         this.compileLet();
-      } else if (this.getCurrentToken() === IF) {
+      } else if (this.tokenizer.currentToken === IF) {
         this.compileIf();
-      } else if (this.getCurrentToken() === WHILE) {
+      } else if (this.tokenizer.currentToken === WHILE) {
         this.compileWhile();
-      } else if (this.getCurrentToken() === DO) {
+      } else if (this.tokenizer.currentToken === DO) {
         this.compileDo();
-      } else if (this.getCurrentToken() === RETURN) {
+      } else if (this.tokenizer.currentToken === RETURN) {
         this.compileReturn();
       }
     }
-
-    this.currentDeep--;
-    this.write("</statements>");
   }
 
   compileLet() {
-    this.write("<letStatement>");
-    this.currentDeep++;
+    this.tokenizer.advance(); // 'let'
 
-    // 'let'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // varName
-    const name = this.getCurrentToken();
+    let isArray = false;
+    const name = this.tokenizer.currentToken;
     const kind = this.symbolTable.kindOf(name);
-    const type = this.symbolTable.typeOf(name);
     const index = this.symbolTable.indexOf(name);
-    const usage = "usage";
-
-    this.writeIdentifier({ name, kind, type, index, usage });
-    this.currentLine++;
+    this.tokenizer.advance(); // varName
 
     // ('[' expression ']')?
-    if (this.getCurrentToken() === "[") {
-      // '['
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    if (this.tokenizer.currentToken === "[") {
+      isArray = true;
 
-      // expression
+      this.vmWriter.writePush(kind, index);
+
+      this.tokenizer.advance(); // '['
       this.compileExpression();
+      this.tokenizer.advance(); // ']'
 
-      // ']'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+      this.vmWriter.writeArithmetic(ADD);
+      this.vmWriter.writePop(TEMP, 0);
     }
 
-    // '='
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // expression
+    this.tokenizer.advance(); // '='
     this.compileExpression();
+    this.tokenizer.advance(); // ';'
 
-    // ';'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</letStatement>");
+    if (isArray) {
+      this.vmWriter.writePop(TEMP, 1);
+      this.vmWriter.writePush(TEMP, 0);
+      this.vmWriter.writePop(POINTER, 1);
+      this.vmWriter.writePush(TEMP, 1);
+      this.vmWriter.writePop(THAT, 0);
+    } else {
+      this.vmWriter.writePop(kind, index);
+    }
   }
 
   compileIf() {
-    this.write("<ifStatement>");
-    this.currentDeep++;
+    const label1 = `L${++this.labelCount}`;
+    const label2 = `L${++this.labelCount}`;
 
-    // 'if'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // 'if'
+    this.tokenizer.advance(); // '('
 
-    // '('
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // expression
     this.compileExpression();
+    this.vmWriter.writeArithmetic(NOT);
+    this.vmWriter.writeIf(label1);
 
-    // ')'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // ')'
+    this.tokenizer.advance(); // '{'
 
-    // '{'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // statements
     this.compileStatements();
 
-    // '}'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // '}'
 
-    if (this.getCurrentToken() === ELSE) {
-      // 'else'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    if (this.tokenizer.currentToken === ELSE) {
+      this.vmWriter.writeGoto(label2);
+      this.vmWriter.writeLabel(label1);
 
-      // '{'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+      this.tokenizer.advance(); // 'else'
+      this.tokenizer.advance(); // '{'
 
-      // statements
       this.compileStatements();
 
-      // '}'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+      this.tokenizer.advance(); // '}'
+      this.vmWriter.writeLabel(label2);
+    } else {
+      this.vmWriter.writeLabel(label1);
     }
-
-    this.currentDeep--;
-    this.write("</ifStatement>");
   }
 
   compileWhile() {
-    this.write("<whileStatement>");
-    this.currentDeep++;
+    const label1 = `L${++this.labelCount}`;
+    const label2 = `L${++this.labelCount}`;
 
-    // 'while'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // 'while'
+    this.tokenizer.advance(); // '('
 
-    // '('
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // expression
+    this.vmWriter.writeLabel(label1);
     this.compileExpression();
+    this.vmWriter.writeArithmetic(NOT);
+    this.vmWriter.writeIf(label2);
 
-    // ')'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // ')'
+    this.tokenizer.advance(); // '{'
 
-    // '{'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // statements
     this.compileStatements();
+    this.vmWriter.writeGoto(label1);
 
-    // '}'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // '}'
 
-    this.currentDeep--;
-    this.write("</whileStatement>");
+    this.vmWriter.writeLabel(label2);
   }
 
   compileDo() {
-    this.write("<doStatement>");
-    this.currentDeep++;
+    this.tokenizer.advance(); // 'do'
 
-    // 'do'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    let name = this.tokenizer.currentToken;
+    this.tokenizer.advance(); // subroutineName | (className | varName)
 
-    this.currentLine++;
-    const nextToken = this.getCurrentToken();
-    this.currentLine--;
-    if (nextToken === ".") {
-      // (className | varName)
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    let nArgs = 0;
 
-      // '.'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    if (this.tokenizer.currentToken === ".") {
+      this.tokenizer.advance(); // '.'
+      const subroutineName = this.tokenizer.currentToken;
+      this.tokenizer.advance(); // subroutineName
+
+      const type = this.symbolTable.typeOf(name);
+      if (type != NONE) {
+        const kind = this.symbolTable.kindOf(name);
+        const index = this.symbolTable.indexOf(name);
+        this.vmWriter.writePush(kind, index);
+        nArgs++;
+
+        name = `${type}.${subroutineName}`;
+      } else {
+        name = `${name}.${subroutineName}`;
+      }
+    } else {
+      this.vmWriter.writePush(POINTER, 0);
+      nArgs++;
+
+      name = `${this.className}.${name}`;
     }
 
-    // subroutineName
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // '('
 
-    // '('
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    nArgs += this.compileExpressionList();
+    this.vmWriter.writeCall(name, nArgs);
+    this.vmWriter.writePop(TEMP, 0);
 
-    // expressionList
-    this.compileExpressionList();
-
-    // ')'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    // ';'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
-
-    this.currentDeep--;
-    this.write("</doStatement>");
+    this.tokenizer.advance(); // ')'
+    this.tokenizer.advance(); // ';'
   }
 
   compileReturn() {
-    this.write("<returnStatement>");
-    this.currentDeep++;
-
-    // 'return'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.tokenizer.advance(); // 'return'
 
     // expression?
-    if (this.getCurrentToken() !== ";") {
+    if (this.tokenizer.currentToken === ";") {
+      this.vmWriter.writePush(CONSTANT, 0);
+    } else {
       this.compileExpression();
     }
 
-    // ';'
-    this.write(this.sourceData[this.currentLine]);
-    this.currentLine++;
+    this.vmWriter.writeReturn();
 
-    this.currentDeep--;
-    this.write("</returnStatement>");
+    this.tokenizer.advance(); // ';'
   }
 
   compileExpression() {
-    this.write("<expression>");
-    this.currentDeep++;
-
-    // 'term'
     this.compileTerm();
 
     // (op term)*
-    while (ops.includes(this.getCurrentToken())) {
-      // op
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    while (ops.includes(this.tokenizer.currentToken)) {
+      const op = this.tokenizer.currentToken;
+      this.tokenizer.advance(); // op
 
-      // term
       this.compileTerm();
-    }
 
-    this.currentDeep--;
-    this.write("</expression>");
+      switch (op) {
+        case "+":
+          this.vmWriter.writeArithmetic(ADD);
+          break;
+        case "-":
+          this.vmWriter.writeArithmetic(SUB);
+          break;
+        case "*":
+          this.vmWriter.writeCall("Math.multiply", 2);
+          break;
+        case "/":
+          this.vmWriter.writeCall("Math.divide", 2);
+          break;
+        case "&":
+          this.vmWriter.writeArithmetic(AND);
+          break;
+        case "|":
+          this.vmWriter.writeArithmetic(OR);
+          break;
+        case "<":
+          this.vmWriter.writeArithmetic(LT);
+          break;
+        case ">":
+          this.vmWriter.writeArithmetic(GT);
+          break;
+        case "=":
+          this.vmWriter.writeArithmetic(EQ);
+          break;
+      }
+    }
   }
 
   compileTerm() {
-    this.write("<term>");
-    this.currentDeep++;
-
-    const finalizeTerm = () => {
-      this.currentDeep--;
-      this.write("</term>");
-    };
-
     // '(' expression ')'
-    if (this.getCurrentToken() === "(") {
-      // '('
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // expression
+    if (this.tokenizer.currentToken === "(") {
+      this.tokenizer.advance(); // '('
       this.compileExpression();
-
-      // ')'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      finalizeTerm();
+      this.tokenizer.advance(); // ')'
       return;
     }
 
     // unaryOp term
-    if (unaryOps.includes(this.getCurrentToken())) {
-      // unaryOp
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // term
+    if (unaryOps.includes(this.tokenizer.currentToken)) {
+      let op = this.tokenizer.currentToken;
+      this.tokenizer.advance(); // unaryOp
       this.compileTerm();
 
-      finalizeTerm();
-      return;
-    }
-
-    this.currentLine++;
-    const nextToken = this.getCurrentToken();
-    this.currentLine--;
-
-    // subroutineCall
-    if (nextToken === "(" || nextToken === ".") {
-      if (nextToken === ".") {
-        // (className | varName)
-        this.write(this.sourceData[this.currentLine]);
-        this.currentLine++;
-
-        // '.'
-        this.write(this.sourceData[this.currentLine]);
-        this.currentLine++;
+      if (op === "-") {
+        this.vmWriter.writeArithmetic(NEG);
+      } else if (op === "~") {
+        this.vmWriter.writeArithmetic(NOT);
       }
 
-      // subroutineName
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // '('
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // expressionList
-      this.compileExpressionList();
-
-      // ')'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      finalizeTerm();
       return;
     }
 
-    // varName '[' expression ']'
-    if (nextToken === "[") {
+    // varName | varName '[' expression ']' | subroutineCall
+    if (this.tokenizer.tokenType() === IDENTIFIER) {
+      let name = this.tokenizer.currentToken;
+      this.tokenizer.advance(); // varName | subroutineName | (className | varName)
+
+      // varName '[' expression ']'
+      if (this.tokenizer.currentToken === "[") {
+        const kind = this.symbolTable.kindOf(name);
+        const index = this.symbolTable.indexOf(name);
+        this.vmWriter.writePush(kind, index);
+
+        this.tokenizer.advance(); // '['
+        this.compileExpression();
+        this.tokenizer.advance(); // ']'
+
+        this.vmWriter.writeArithmetic(ADD);
+        this.vmWriter.writePop(POINTER, 1);
+        this.vmWriter.writePush(THAT, 0);
+
+        return;
+      }
+
+      // (className | varName) '.' subroutineName '(' expressionList ')'
+      if (this.tokenizer.currentToken === ".") {
+        this.tokenizer.advance(); // '.'
+        const subroutineName = this.tokenizer.currentToken;
+        this.tokenizer.advance(); // subroutineName
+
+        let nArgs = 0;
+        const type = this.symbolTable.typeOf(name);
+        if (type != NONE) {
+          const kind = this.symbolTable.kindOf(name);
+          const index = this.symbolTable.indexOf(name);
+          this.vmWriter.writePush(kind, index);
+          nArgs++;
+
+          name = `${type}.${subroutineName}`;
+        } else {
+          name = `${name}.${subroutineName}`;
+        }
+
+        this.tokenizer.advance(); // '('
+
+        nArgs += this.compileExpressionList();
+        this.vmWriter.writeCall(name, nArgs);
+
+        this.tokenizer.advance(); // ')'
+        return;
+      }
+
+      // subroutineName '(' expressionList ')'
+      if (this.tokenizer.currentToken === "(") {
+        this.tokenizer.advance(); // '('
+
+        const nArgs = this.compileExpressionList();
+        this.vmWriter.writeCall(name, nArgs);
+
+        this.tokenizer.advance(); // ')'
+        return;
+      }
+
       // varName
-      const name = this.getCurrentToken();
       const kind = this.symbolTable.kindOf(name);
-      const type = this.symbolTable.typeOf(name);
       const index = this.symbolTable.indexOf(name);
-      const usage = "usage";
 
-      this.writeIdentifier({ name, kind, type, index, usage });
-      this.currentLine++;
+      this.vmWriter.writePush(kind, index);
 
-      // '['
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      // expression
-      this.compileExpression();
-
-      // ']'
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
-
-      finalizeTerm();
       return;
     }
 
-    // integerConstant | stringConstant | keywordConstant | varName
-    if (this.getCurrentTokenType() === "identifier") {
-      const name = this.getCurrentToken();
-      const kind = this.symbolTable.kindOf(name);
-      const type = this.symbolTable.typeOf(name);
-      const index = this.symbolTable.indexOf(name);
-      const usage = "usage";
-
-      this.writeIdentifier({ name, kind, type, index, usage });
-      this.currentLine++;
-    } else {
-      this.write(this.sourceData[this.currentLine]);
-      this.currentLine++;
+    // integerConstant
+    if (this.tokenizer.tokenType() === INT_CONST) {
+      const num = this.tokenizer.intVal();
+      this.vmWriter.writePush(CONSTANT, num);
+      this.tokenizer.advance(); // integerConstant
     }
 
-    finalizeTerm();
+    // stringConstant
+    if (this.tokenizer.tokenType() === STRING_CONST) {
+      const string = this.tokenizer.stringVal();
+      const length = string.length;
+
+      this.vmWriter.writePush(CONSTANT, length);
+      this.vmWriter.writeCall("String.new", 1);
+      for (let i = 0; i < length; i++) {
+        this.vmWriter.writePush(CONSTANT, string.charCodeAt(i));
+        this.vmWriter.writeCall("String.appendChar", 2);
+      }
+      this.tokenizer.advance(); // stringConstant
+      return;
+    }
+
+    // keywordConstant
+    if (this.tokenizer.tokenType() === KEYWORD) {
+      const keyword = this.tokenizer.keyword();
+
+      switch (keyword) {
+        case TRUE:
+          this.vmWriter.writePush(CONSTANT, 1);
+          this.vmWriter.writeArithmetic(NEG);
+          break;
+        case FALSE:
+          this.vmWriter.writePush(CONSTANT, 0);
+          break;
+        case NULL:
+          this.vmWriter.writePush(CONSTANT, 0);
+          break;
+        case THIS:
+          this.vmWriter.writePush(POINTER, 0);
+          break;
+      }
+
+      this.tokenizer.advance(); // integerConstant
+    }
   }
 
   compileExpressionList() {
-    this.write("<expressionList>");
-    this.currentDeep++;
+    let nArgs = 0;
 
     // (expression (',' expression)*)?
-    if (this.getCurrentToken() != ")") {
-      // expression
+    if (this.tokenizer.currentToken != ")") {
       this.compileExpression();
+      nArgs++;
 
       // (',' expression)*)?
-      while (this.getCurrentToken() === ",") {
-        // ','
-        this.write(this.sourceData[this.currentLine]);
-        this.currentLine++;
-
-        // expression
+      while (this.tokenizer.currentToken === ",") {
+        this.tokenizer.advance(); // ','
         this.compileExpression();
+        nArgs++;
       }
     }
 
-    this.currentDeep--;
-    this.write("</expressionList>");
+    return nArgs;
   }
 }
